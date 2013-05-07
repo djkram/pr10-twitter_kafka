@@ -1,8 +1,15 @@
 package org.bdigital;
 
+import java.nio.charset.Charset;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import kafka.javaapi.producer.Producer;
+import kafka.javaapi.producer.ProducerData;
+import kafka.message.Message;
+import kafka.producer.ProducerConfig;
 
 import org.apache.log4j.BasicConfigurator;
 import org.slf4j.Logger;
@@ -30,14 +37,27 @@ public class TwitterKafkaProducer {
     public static void main(String[] args) {
 
 	BasicConfigurator.configure();
+	
+	// Init properties
+	Properties props =  new Properties();
+	props.put("zk.connect", "127.0.0.1:2181");
+	props.put("serializer.class", "kafka.serializer.DefaultEncoder");
+	props.put("producer.type", "async");
+	props.put("compression.codec", "1");
+	props.put("batch.size", "10");
+	props.put("queue.time", "1000");
+	String topicName = "realtimetweets";
+	
+	ProducerConfig config = new ProducerConfig(props);
+	Producer<String, Message> producer = new Producer<String, Message>(config);
 
 	BlockingQueue<String> processorQueue = new LinkedBlockingQueue<String>(10000);
 	BlockingQueue<Event> eventQueue = new LinkedBlockingQueue<Event>(10000);
 
-	Authentication auth = new OAuth1("HzlOSyMnSbcfjaiyvBfQ",
-		"Cee7ktUmOe3fzIxYuKp9Tqq5V7n4KJD9LOzGjnnsC8",
-		"20428117-OpqDjT6iDatc0zGylS5am93QTSjrDQ0LqQiXimDms",
-		"bYHS24VNamQ8oVwBy8hH2XJR5s5iYWLSfwm4wJ5Qg");
+	Authentication auth = new OAuth1("BbsNbZvwGY3iQCn8LuTdQ",
+		"YbYwBG3zkGnAb1Hg9eSBnT2fPwcThoFxycCGgNDY78",
+		"833529332-tnyFBzf69fXcjNwZzaOzWr20mI0FUVB3IJ1AAUWV",
+		"1Fk7cdselp1VyEqy7CPy9IWMp7wRvNwGJALnHDkL60");
 
 	StatusesFilterEndpoint endPoint = new StatusesFilterEndpoint().trackTerms(
 		Arrays.asList(new String[] { "Barcelona", "Catalunya" })).locations(
@@ -63,7 +83,15 @@ public class TwitterKafkaProducer {
 	    try {
 
 		String jsonTweet = processorQueue.take();
-		log.info(jsonTweet);
+		
+		// adding kafka
+		byte[] bytes = jsonTweet.getBytes(Charset.forName("UTF-8"));
+		Message message = new Message(bytes);
+		ProducerData<String, Message> data = new ProducerData<String, Message>(topicName, message);
+		producer.send(data);
+		
+		log.debug(jsonTweet);
+		log.info(hosebirdClient.getStatsTracker().toString());
 
 	    } catch (Exception e) {
 		e.printStackTrace();
